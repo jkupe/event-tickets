@@ -1,0 +1,56 @@
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import { AuthStack } from './stacks/auth-stack';
+import { DatabaseStack } from './stacks/database-stack';
+import { EmailStack } from './stacks/email-stack';
+import { ApiStack } from './stacks/api-stack';
+import { FrontendStack } from './stacks/frontend-stack';
+
+const app = new cdk.App();
+
+const env = {
+  account: process.env['CDK_DEFAULT_ACCOUNT'],
+  region: process.env['CDK_DEFAULT_REGION'] || 'us-east-1',
+};
+
+const stageName = app.node.tryGetContext('stage') || 'dev';
+
+const authStack = new AuthStack(app, `${stageName}-EventTickets-Auth`, {
+  env,
+  stageName,
+});
+
+const databaseStack = new DatabaseStack(app, `${stageName}-EventTickets-Database`, {
+  env,
+  stageName,
+});
+
+const emailStack = new EmailStack(app, `${stageName}-EventTickets-Email`, {
+  env,
+  stageName,
+  domainName: app.node.tryGetContext('domain') || '',
+});
+
+const apiStack = new ApiStack(app, `${stageName}-EventTickets-Api`, {
+  env,
+  stageName,
+  userPool: authStack.userPool,
+  userPoolClient: authStack.userPoolClient,
+  table: databaseStack.table,
+  emailIdentityArn: emailStack.emailIdentityArn,
+  fromEmail: emailStack.fromEmail,
+});
+
+apiStack.addDependency(authStack);
+apiStack.addDependency(databaseStack);
+apiStack.addDependency(emailStack);
+
+new FrontendStack(app, `${stageName}-EventTickets-Frontend`, {
+  env,
+  stageName,
+  apiUrl: apiStack.apiUrl,
+  userPoolId: authStack.userPool.userPoolId,
+  userPoolClientId: authStack.userPoolClient.userPoolClientId,
+}).addDependency(apiStack);
+
+app.synth();

@@ -1,5 +1,5 @@
 {
-  "name": "@org/source",
+  "name": "@event-tickets/source",
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {},
@@ -7,6 +7,10 @@
   "dependencies": {},
   "devDependencies": {
     "@nx/js": "22.5.0",
+    "@nx/react": "22.5.0",
+    "@nx/vite": "22.5.0",
+    "@nx/esbuild": "22.5.0",
+    "@nx/eslint": "22.5.0",
     "@swc-node/register": "1.11.1",
     "@swc/core": "1.15.8",
     "@swc/helpers": "0.5.18",
@@ -16,6 +20,8 @@
     "typescript": "~5.9.2"
   },
   "workspaces": [
-    "packages/*"
+    "apps/*",
+    "libs/shared/*",
+    "libs/lambda/*"
   ]
 }

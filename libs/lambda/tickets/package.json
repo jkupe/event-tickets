@@ -1,0 +1,26 @@
+{
+  "name": "@event-tickets/lambda-tickets",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@event-tickets/shared-types": "*",
+    "@event-tickets/shared-utils": "*",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-secrets-manager": "^3.0.0",
+    "@aws-sdk/client-lambda": "^3.0.0",
+    "stripe": "^17.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "qrcode": "^1.5.4",
+    "zod": "^3.24.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/uuid": "^10.0.0"
+  }
+}

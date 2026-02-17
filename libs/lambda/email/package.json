@@ -1,0 +1,16 @@
+{
+  "name": "@event-tickets/lambda-email",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@event-tickets/shared-types": "*",
+    "@aws-sdk/client-sesv2": "^3.0.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/qrcode": "^1.5.5"
+  }
+}

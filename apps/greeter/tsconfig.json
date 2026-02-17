@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../../libs/shared/types/src/**/*.ts",
+    "../../libs/shared/utils/src/**/*.ts",
+    "../../libs/shared/ui/src/**/*.ts",
+    "../../libs/shared/ui/src/**/*.tsx",
+    "../../libs/shared/auth/src/**/*.ts",
+    "../../libs/shared/auth/src/**/*.tsx",
+    "../../libs/shared/api-client/src/**/*.ts"
+  ]
+}

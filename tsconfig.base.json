@@ -1,21 +1,32 @@
 {
   "compilerOptions": {
-    "composite": true,
+    "target": "es2022",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "declaration": true,
     "declarationMap": true,
-    "emitDeclarationOnly": true,
+    "sourceMap": true,
     "importHelpers": true,
     "isolatedModules": true,
-    "lib": ["es2022"],
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "noEmitOnError": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true,
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "es2022",
-    "customConditions": ["@org/source"]
-  }
+    "baseUrl": ".",
+    "paths": {
+      "@event-tickets/shared-types": ["libs/shared/types/src/index.ts"],
+      "@event-tickets/shared-utils": ["libs/shared/utils/src/index.ts"],
+      "@event-tickets/shared-ui": ["libs/shared/ui/src/index.ts"],
+      "@event-tickets/shared-auth": ["libs/shared/auth/src/index.ts"],
+      "@event-tickets/shared-api-client": ["libs/shared/api-client/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
 }

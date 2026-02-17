@@ -1,0 +1,16 @@
+{
+  "name": "@event-tickets/lambda-auth",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@event-tickets/shared-types": "*",
+    "jsonwebtoken": "^9.0.0",
+    "jwks-rsa": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/aws-lambda": "^8.10.0"
+  }
+}

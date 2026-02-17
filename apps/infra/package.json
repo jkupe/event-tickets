@@ -1,0 +1,16 @@
+{
+  "name": "@event-tickets/infra",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/main.ts",
+  "types": "./src/main.ts",
+  "dependencies": {
+    "@event-tickets/shared-types": "*",
+    "aws-cdk-lib": "^2.180.0",
+    "constructs": "^10.4.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.180.0",
+    "esbuild": "^0.24.0"
+  }
+}
