@@ -1,0 +1,30 @@
+{
+  "name": "@event-tickets/infra",
+  "targets": {
+    "synth": {
+      "command": "npx cdk synth",
+      "options": {
+        "cwd": "apps/infra"
+      }
+    },
+    "deploy": {
+      "command": "npx cdk deploy --all --require-approval never",
+      "options": {
+        "cwd": "apps/infra"
+      },
+      "dependsOn": ["^build"]
+    },
+    "diff": {
+      "command": "npx cdk diff",
+      "options": {
+        "cwd": "apps/infra"
+      }
+    },
+    "destroy": {
+      "command": "npx cdk destroy --all",
+      "options": {
+        "cwd": "apps/infra"
+      }
+    }
+  }
+}
