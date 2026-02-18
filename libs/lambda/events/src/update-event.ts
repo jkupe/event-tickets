@@ -2,34 +2,31 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, keys, updateEventSchema } from '@event-tickets/shared-types';
-import { successResponse, badRequestResponse, forbiddenResponse, notFoundResponse, errorResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { successResponse, badRequestResponse, forbiddenResponse, notFoundResponse, errorResponse, getAuthContext, getCorsOrigin, parseBody } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth || auth.role !== 'ADMIN') {
-      return forbiddenResponse('Admin access required');
+      return forbiddenResponse('Admin access required', origin);
     }
 
     const eventId = event.pathParameters?.['eventId'];
     if (!eventId) {
-      return badRequestResponse('Event ID is required');
+      return badRequestResponse('Event ID is required', origin);
     }
 
-    let body: unknown;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch {
-      return badRequestResponse('Invalid JSON body');
-    }
+    const result = parseBody(event);
+    if ('error' in result) return result.error;
 
-    const parsed = updateEventSchema.safeParse(body);
+    const parsed = updateEventSchema.safeParse(result.data);
     if (!parsed.success) {
-      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '));
+      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '), origin);
     }
 
     // Get existing event
@@ -42,11 +39,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     if (!existing.Item) {
-      return notFoundResponse('Event not found');
+      return notFoundResponse('Event not found', origin);
     }
 
     const now = new Date().toISOString();
-    const updated = {
+    const updated: Record<string, unknown> = {
       ...existing.Item,
       ...parsed.data,
       updatedAt: now,
@@ -78,9 +75,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdAt: updated['createdAt'],
       updatedAt: updated['updatedAt'],
       createdBy: updated['createdBy'],
-    });
+    }, origin);
   } catch (error) {
     console.error('Error updating event:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to update event');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to update event', origin);
   }
 };

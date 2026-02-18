@@ -2,17 +2,18 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, keys } from '@event-tickets/shared-types';
-import { successResponse, notFoundResponse, errorResponse } from '@event-tickets/shared-utils';
+import { successResponse, notFoundResponse, errorResponse, getCorsOrigin } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const eventId = event.pathParameters?.['eventId'];
     if (!eventId) {
-      return errorResponse(400, 'BAD_REQUEST', 'Event ID is required');
+      return errorResponse(400, 'BAD_REQUEST', 'Event ID is required', origin);
     }
 
     const result = await client.send(new GetCommand({
@@ -24,7 +25,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     if (!result.Item) {
-      return notFoundResponse('Event not found');
+      return notFoundResponse('Event not found', origin);
     }
 
     const item = result.Item;
@@ -44,9 +45,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdAt: item['createdAt'],
       updatedAt: item['updatedAt'],
       createdBy: item['createdBy'],
-    });
+    }, origin);
   } catch (error) {
     console.error('Error getting event:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to get event');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to get event', origin);
   }
 };

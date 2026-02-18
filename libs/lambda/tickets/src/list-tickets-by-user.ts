@@ -2,17 +2,18 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, keys } from '@event-tickets/shared-types';
-import { errorResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { jsonResponse, errorResponse, getAuthContext, getCorsOrigin } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth) {
-      return errorResponse(401, 'UNAUTHORIZED', 'Authentication required');
+      return errorResponse(401, 'UNAUTHORIZED', 'Authentication required', origin);
     }
 
     // Find user first to get userId
@@ -28,7 +29,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const user = userResult.Items?.[0];
     if (!user) {
-      return { statusCode: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ data: [] }) };
+      return jsonResponse(200, { data: [] }, origin);
     }
 
     const userId = user['id'] as string;
@@ -60,13 +61,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdAt: item['createdAt'],
     }));
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ data: tickets }),
-    };
+    return jsonResponse(200, { data: tickets }, origin);
   } catch (error) {
     console.error('Error listing user tickets:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to list tickets');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to list tickets', origin);
   }
 };

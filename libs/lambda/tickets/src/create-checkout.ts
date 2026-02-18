@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dyn
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import Stripe from 'stripe';
 import { TABLE_NAME, EventStatus, TicketStatus, keys, createCheckoutSchema } from '@event-tickets/shared-types';
-import { errorResponse, badRequestResponse, notFoundResponse, getAuthContext, generateTicketId } from '@event-tickets/shared-utils';
+import { jsonResponse, errorResponse, badRequestResponse, notFoundResponse, getAuthContext, generateTicketId, getCorsOrigin, parseBody } from '@event-tickets/shared-utils';
 
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -24,27 +24,24 @@ async function getStripe(): Promise<Stripe> {
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth) {
-      return errorResponse(401, 'UNAUTHORIZED', 'Authentication required');
+      return errorResponse(401, 'UNAUTHORIZED', 'Authentication required', origin);
     }
 
     const eventId = event.pathParameters?.['eventId'];
     if (!eventId) {
-      return badRequestResponse('Event ID is required');
+      return badRequestResponse('Event ID is required', origin);
     }
 
-    let body: unknown;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch {
-      return badRequestResponse('Invalid JSON body');
-    }
+    const result = parseBody(event);
+    if ('error' in result) return result.error;
 
-    const parsed = createCheckoutSchema.safeParse(body);
+    const parsed = createCheckoutSchema.safeParse(result.data);
     if (!parsed.success) {
-      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '));
+      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '), origin);
     }
     const quantity = parsed.data.quantity;
 
@@ -56,17 +53,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const eventItem = eventResult.Item;
     if (!eventItem) {
-      return notFoundResponse('Event not found');
+      return notFoundResponse('Event not found', origin);
     }
 
     if (eventItem['status'] !== EventStatus.ACTIVE) {
-      return badRequestResponse('Event is not available for purchase');
+      return badRequestResponse('Event is not available for purchase', origin);
     }
 
     if (eventItem['capacity'] !== null) {
       const available = (eventItem['capacity'] as number) - (eventItem['ticketsSold'] as number) - (eventItem['compTicketsIssued'] as number);
       if (available < quantity) {
-        return badRequestResponse(`Only ${available} tickets available`);
+        return badRequestResponse(`Only ${available} tickets available`, origin);
       }
     }
 
@@ -74,9 +71,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const now = new Date().toISOString();
     const priceInCents = eventItem['price'] as number;
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session — use trusted ALLOWED_ORIGIN env var, not request header
     const stripe = await getStripe();
-    const origin = event.headers['origin'] || event.headers['Origin'] || '';
+    const allowedOrigin = process.env['ALLOWED_ORIGIN'] || '';
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -95,8 +92,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ticketId,
         userId: auth.userId,
       },
-      success_url: `${origin}/events/${eventId}/confirmation?ticketId=${ticketId}`,
-      cancel_url: `${origin}/events/${eventId}`,
+      success_url: `${allowedOrigin}/events/${eventId}/confirmation?ticketId=${ticketId}`,
+      cancel_url: `${allowedOrigin}/events/${eventId}`,
       customer_email: auth.email,
     });
 
@@ -132,20 +129,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       },
     }));
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        checkoutUrl: session.url,
-        sessionId: session.id,
-        ticketId,
-      }),
-    };
+    return jsonResponse(200, {
+      checkoutUrl: session.url,
+      sessionId: session.id,
+      ticketId,
+    }, origin);
   } catch (error) {
     console.error('Error creating checkout:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to create checkout session');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to create checkout session', origin);
   }
 };

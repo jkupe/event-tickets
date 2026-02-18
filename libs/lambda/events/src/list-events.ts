@@ -2,13 +2,14 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, EventStatus, keys } from '@event-tickets/shared-types';
-import { successResponse, errorResponse } from '@event-tickets/shared-utils';
+import { jsonResponse, errorResponse, getCorsOrigin } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const status = event.queryStringParameters?.['status'] || EventStatus.ACTIVE;
     const limit = Math.min(parseInt(event.queryStringParameters?.['limit'] || '50', 10), 100);
@@ -49,16 +50,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       response['nextToken'] = Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64');
     }
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return jsonResponse(200, response, origin);
   } catch (error) {
     console.error('Error listing events:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to list events');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to list events', origin);
   }
 };

@@ -2,19 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { initializeAmplify } from '@event-tickets/shared-auth';
+import { initializeAmplify, loadConfig } from '@event-tickets/shared-auth';
 import { configureApiClient } from '@event-tickets/shared-api-client';
 import { App } from './app';
 import './styles.css';
-
-const amplifyConfig = {
-  userPoolId: import.meta.env.VITE_USER_POOL_ID || '',
-  userPoolClientId: import.meta.env.VITE_USER_POOL_CLIENT_ID || '',
-  region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
-};
-
-initializeAmplify(amplifyConfig);
-configureApiClient(import.meta.env.VITE_API_URL || '');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,12 +16,24 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>
-);
+async function bootstrap() {
+  const config = await loadConfig();
+  initializeAmplify({
+    userPoolId: config.userPoolId,
+    userPoolClientId: config.userPoolClientId,
+    region: config.region,
+  });
+  configureApiClient(config.apiUrl);
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>
+  );
+}
+
+bootstrap();

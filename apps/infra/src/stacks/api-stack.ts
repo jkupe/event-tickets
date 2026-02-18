@@ -16,6 +16,11 @@ interface ApiStackProps extends cdk.StackProps {
   table: dynamodb.Table;
   emailIdentityArn: string;
   fromEmail: string;
+  frontendUrls: {
+    public: string;
+    admin: string;
+    greeter: string;
+  };
 }
 
 export class ApiStack extends cdk.Stack {
@@ -46,6 +51,16 @@ export class ApiStack extends cdk.Stack {
       },
     });
 
+    // Build allowed origins list — CloudFront domains + localhost for dev
+    const allowedOrigins = [
+      props.frontendUrls.public,
+      props.frontendUrls.admin,
+      props.frontendUrls.greeter,
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ];
+
     // Common Lambda environment
     const commonEnv: Record<string, string> = {
       TABLE_NAME: props.table.tableName,
@@ -56,6 +71,7 @@ export class ApiStack extends cdk.Stack {
       STRIPE_API_KEY_SECRET_ARN: stripeApiKey.secretArn,
       STRIPE_WEBHOOK_SECRET_ARN: stripeWebhookSecret.secretArn,
       QR_JWT_SECRET_ARN: qrJwtSecret.secretArn,
+      ALLOWED_ORIGINS: allowedOrigins.join(','),
     };
 
     // Common bundling options
@@ -112,7 +128,8 @@ export class ApiStack extends cdk.Stack {
     // Ticket Lambdas
     const createCheckout = createFunction(
       'create-checkout',
-      path.join(libsRoot, 'lambda', 'tickets', 'src', 'create-checkout.ts')
+      path.join(libsRoot, 'lambda', 'tickets', 'src', 'create-checkout.ts'),
+      { ALLOWED_ORIGIN: props.frontendUrls.public }
     );
     stripeApiKey.grantRead(createCheckout);
 
@@ -191,7 +208,7 @@ export class ApiStack extends cdk.Stack {
         throttlingRateLimit: 50,
       },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowOrigins: allowedOrigins,
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: ['Content-Type', 'Authorization'],
       },

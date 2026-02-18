@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, QueryCommand, UpdateCommand, GetCommand } from 
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import jwt from 'jsonwebtoken';
 import { TABLE_NAME, TicketStatus, keys, validateTicketSchema } from '@event-tickets/shared-types';
-import { errorResponse, badRequestResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { jsonResponse, errorResponse, badRequestResponse, getAuthContext, getCorsOrigin, parseBody } from '@event-tickets/shared-utils';
 
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -24,22 +24,19 @@ async function getQrSecret(): Promise<string> {
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth || (auth.role !== 'ADMIN' && auth.role !== 'GREETER')) {
-      return errorResponse(403, 'FORBIDDEN', 'Greeter or admin access required');
+      return errorResponse(403, 'FORBIDDEN', 'Greeter or admin access required', origin);
     }
 
-    let body: unknown;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch {
-      return badRequestResponse('Invalid JSON body');
-    }
+    const result = parseBody(event);
+    if ('error' in result) return result.error;
 
-    const parsed = validateTicketSchema.safeParse(body);
+    const parsed = validateTicketSchema.safeParse(result.data);
     if (!parsed.success) {
-      return badRequestResponse('QR token is required');
+      return badRequestResponse('QR token is required', origin);
     }
 
     const secret = await getQrSecret();
@@ -48,11 +45,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     try {
       payload = jwt.verify(parsed.data.qrToken, secret) as typeof payload;
     } catch (err) {
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ valid: false, reason: 'EXPIRED' }),
-      };
+      return jsonResponse(200, { valid: false, reason: 'EXPIRED' }, origin);
     }
 
     const ticketId = payload.sub;
@@ -69,27 +62,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const ticket = ticketResult.Items?.[0];
     if (!ticket) {
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ valid: false, reason: 'NOT_FOUND' }),
-      };
+      return jsonResponse(200, { valid: false, reason: 'NOT_FOUND' }, origin);
     }
 
     if (ticket['status'] === TicketStatus.USED) {
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ valid: false, reason: 'ALREADY_CHECKED_IN', ticketId, userName: ticket['userName'] || ticket['userEmail'] }),
-      };
+      return jsonResponse(200, { valid: false, reason: 'ALREADY_CHECKED_IN', ticketId, userName: ticket['userName'] || ticket['userEmail'] }, origin);
     }
 
     if (ticket['status'] !== TicketStatus.VALID) {
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ valid: false, reason: 'INVALID', ticketId }),
-      };
+      return jsonResponse(200, { valid: false, reason: 'INVALID', ticketId }, origin);
     }
 
     // Conditional update: VALID -> USED
@@ -113,11 +94,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }));
     } catch (err: unknown) {
       if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
-        return {
-          statusCode: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-          body: JSON.stringify({ valid: false, reason: 'ALREADY_CHECKED_IN', ticketId }),
-        };
+        return jsonResponse(200, { valid: false, reason: 'ALREADY_CHECKED_IN', ticketId }, origin);
       }
       throw err;
     }
@@ -128,18 +105,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Key: { PK: keys.event.pk(eventId), SK: keys.event.sk() },
     }));
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({
-        valid: true,
-        ticketId,
-        userName: ticket['userName'] || ticket['userEmail'],
-        eventName: eventResult.Item?.['name'] || '',
-      }),
-    };
+    return jsonResponse(200, {
+      valid: true,
+      ticketId,
+      userName: ticket['userName'] || ticket['userEmail'],
+      eventName: eventResult.Item?.['name'] || '',
+    }, origin);
   } catch (error) {
     console.error('Error validating ticket:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to validate ticket');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to validate ticket', origin);
   }
 };

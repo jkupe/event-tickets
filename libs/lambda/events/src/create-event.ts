@@ -2,29 +2,26 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, EventStatus, keys, createEventSchema } from '@event-tickets/shared-types';
-import { createdResponse, badRequestResponse, forbiddenResponse, errorResponse, getAuthContext, generateEventId } from '@event-tickets/shared-utils';
+import { createdResponse, badRequestResponse, forbiddenResponse, errorResponse, getAuthContext, generateEventId, getCorsOrigin, parseBody } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth || auth.role !== 'ADMIN') {
-      return forbiddenResponse('Admin access required');
+      return forbiddenResponse('Admin access required', origin);
     }
 
-    let body: unknown;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch {
-      return badRequestResponse('Invalid JSON body');
-    }
+    const result = parseBody(event);
+    if ('error' in result) return result.error;
 
-    const parsed = createEventSchema.safeParse(body);
+    const parsed = createEventSchema.safeParse(result.data);
     if (!parsed.success) {
-      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '));
+      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '), origin);
     }
 
     const eventId = generateEventId();
@@ -69,9 +66,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdAt: now,
       updatedAt: now,
       createdBy: auth.userId,
-    });
+    }, origin);
   } catch (error) {
     console.error('Error creating event:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to create event');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to create event', origin);
   }
 };

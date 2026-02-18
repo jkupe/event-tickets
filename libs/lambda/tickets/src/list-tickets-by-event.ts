@@ -2,22 +2,23 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, keys } from '@event-tickets/shared-types';
-import { forbiddenResponse, badRequestResponse, errorResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { jsonResponse, forbiddenResponse, badRequestResponse, errorResponse, getAuthContext, getCorsOrigin } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth || auth.role !== 'ADMIN') {
-      return forbiddenResponse('Admin access required');
+      return forbiddenResponse('Admin access required', origin);
     }
 
     const eventId = event.pathParameters?.['eventId'];
     if (!eventId) {
-      return badRequestResponse('Event ID is required');
+      return badRequestResponse('Event ID is required', origin);
     }
 
     const result = await client.send(new QueryCommand({
@@ -47,13 +48,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdAt: item['createdAt'],
     }));
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ data: tickets }),
-    };
+    return jsonResponse(200, { data: tickets }, origin);
   } catch (error) {
     console.error('Error listing tickets:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to list tickets');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to list tickets', origin);
   }
 };

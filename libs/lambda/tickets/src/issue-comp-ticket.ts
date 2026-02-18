@@ -5,7 +5,7 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import jwt from 'jsonwebtoken';
 import { TABLE_NAME, EventStatus, TicketStatus, keys, issueCompTicketSchema } from '@event-tickets/shared-types';
-import { createdResponse, badRequestResponse, forbiddenResponse, notFoundResponse, errorResponse, getAuthContext, generateTicketId } from '@event-tickets/shared-utils';
+import { createdResponse, badRequestResponse, forbiddenResponse, notFoundResponse, errorResponse, getAuthContext, generateTicketId, getCorsOrigin, parseBody } from '@event-tickets/shared-utils';
 
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -26,27 +26,24 @@ async function getQrSecret(): Promise<string> {
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth || auth.role !== 'ADMIN') {
-      return forbiddenResponse('Admin access required');
+      return forbiddenResponse('Admin access required', origin);
     }
 
     const eventId = event.pathParameters?.['eventId'];
     if (!eventId) {
-      return badRequestResponse('Event ID is required');
+      return badRequestResponse('Event ID is required', origin);
     }
 
-    let body: unknown;
-    try {
-      body = JSON.parse(event.body || '{}');
-    } catch {
-      return badRequestResponse('Invalid JSON body');
-    }
+    const result = parseBody(event);
+    if ('error' in result) return result.error;
 
-    const parsed = issueCompTicketSchema.safeParse(body);
+    const parsed = issueCompTicketSchema.safeParse(result.data);
     if (!parsed.success) {
-      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '));
+      return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '), origin);
     }
 
     // Get event
@@ -57,11 +54,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const eventItem = eventResult.Item;
     if (!eventItem) {
-      return notFoundResponse('Event not found');
+      return notFoundResponse('Event not found', origin);
     }
 
     if (eventItem['status'] === EventStatus.CANCELLED || eventItem['status'] === EventStatus.PAST) {
-      return badRequestResponse('Cannot issue comp tickets for this event');
+      return badRequestResponse('Cannot issue comp tickets for this event', origin);
     }
 
     const ticketId = generateTicketId();
@@ -141,9 +138,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       status: TicketStatus.VALID,
       isComp: true,
       quantity: parsed.data.quantity,
-    });
+    }, origin);
   } catch (error) {
     console.error('Error issuing comp ticket:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to issue comp ticket');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to issue comp ticket', origin);
   }
 };

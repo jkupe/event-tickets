@@ -2,28 +2,25 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { keys, TABLE_NAME, updateUserProfileSchema } from '@event-tickets/shared-types';
-import { successResponse, errorResponse, badRequestResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { successResponse, errorResponse, badRequestResponse, getAuthContext, getCorsOrigin, parseBody } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   const auth = getAuthContext(event);
-  if (\!auth) {
-    return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized');
+  if (!auth) {
+    return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized', origin);
   }
 
-  let body: unknown;
-  try {
-    body = JSON.parse(event.body || '{}');
-  } catch {
-    return badRequestResponse('Invalid JSON body');
-  }
+  const result = parseBody(event);
+  if ('error' in result) return result.error;
 
-  const parsed = updateUserProfileSchema.safeParse(body);
-  if (\!parsed.success) {
-    return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '));
+  const parsed = updateUserProfileSchema.safeParse(result.data);
+  if (!parsed.success) {
+    return badRequestResponse(parsed.error.issues.map(i => i.message).join(', '), origin);
   }
 
   // Find user
@@ -38,29 +35,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }));
 
   const user = lookup.Items?.[0];
-  if (\!user) {
-    return errorResponse(404, 'NOT_FOUND', 'User profile not found');
+  if (!user) {
+    return errorResponse(404, 'NOT_FOUND', 'User profile not found', origin);
   }
 
   const updates: string[] = [];
   const expressionValues: Record<string, unknown> = {};
   const expressionNames: Record<string, string> = {};
 
-  if (parsed.data.name \!== undefined) {
+  if (parsed.data.name !== undefined) {
     updates.push('#n = :name');
     expressionNames['#n'] = 'name';
     expressionValues[':name'] = parsed.data.name;
   }
-  if (parsed.data.phone \!== undefined) {
+  if (parsed.data.phone !== undefined) {
     updates.push('phone = :phone');
     expressionValues[':phone'] = parsed.data.phone;
   }
 
   if (updates.length === 0) {
-    return successResponse(user);
+    return successResponse(user, origin);
   }
 
-  const result = await client.send(new UpdateCommand({
+  const updateResult = await client.send(new UpdateCommand({
     TableName: TABLE_NAME,
     Key: {
       PK: user['PK'],
@@ -72,7 +69,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     ReturnValues: 'ALL_NEW',
   }));
 
-  const updated = result.Attributes!;
+  const updated = updateResult.Attributes!;
   return successResponse({
     id: updated['id'],
     email: updated['email'],
@@ -82,5 +79,5 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     cognitoSub: updated['cognitoSub'],
     stripeCustomerId: updated['stripeCustomerId'],
     createdAt: updated['createdAt'],
-  });
+  }, origin);
 };

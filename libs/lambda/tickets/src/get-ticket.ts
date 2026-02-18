@@ -2,22 +2,23 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, keys } from '@event-tickets/shared-types';
-import { successResponse, notFoundResponse, errorResponse, forbiddenResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { successResponse, notFoundResponse, errorResponse, forbiddenResponse, getAuthContext, getCorsOrigin } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth) {
-      return errorResponse(401, 'UNAUTHORIZED', 'Authentication required');
+      return errorResponse(401, 'UNAUTHORIZED', 'Authentication required', origin);
     }
 
     const ticketId = event.pathParameters?.['ticketId'];
     if (!ticketId) {
-      return errorResponse(400, 'BAD_REQUEST', 'Ticket ID is required');
+      return errorResponse(400, 'BAD_REQUEST', 'Ticket ID is required', origin);
     }
 
     // Look up ticket via GSI2
@@ -33,12 +34,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const ticket = result.Items?.[0];
     if (!ticket) {
-      return notFoundResponse('Ticket not found');
+      return notFoundResponse('Ticket not found', origin);
     }
 
     // Users can only view their own tickets; admins can view all
     if (auth.role !== 'ADMIN' && ticket['userEmail'] !== auth.email) {
-      return forbiddenResponse('Access denied');
+      return forbiddenResponse('Access denied', origin);
     }
 
     return successResponse({
@@ -59,9 +60,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       quantity: ticket['quantity'],
       amountPaid: ticket['amountPaid'],
       createdAt: ticket['createdAt'],
-    });
+    }, origin);
   } catch (error) {
     console.error('Error getting ticket:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to get ticket');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to get ticket', origin);
   }
 };

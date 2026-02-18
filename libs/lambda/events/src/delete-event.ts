@@ -2,22 +2,23 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME, EventStatus, keys } from '@event-tickets/shared-types';
-import { successResponse, forbiddenResponse, notFoundResponse, badRequestResponse, errorResponse, getAuthContext } from '@event-tickets/shared-utils';
+import { successResponse, forbiddenResponse, notFoundResponse, badRequestResponse, errorResponse, getAuthContext, getCorsOrigin } from '@event-tickets/shared-utils';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const origin = getCorsOrigin(event);
   try {
     const auth = getAuthContext(event);
     if (!auth || auth.role !== 'ADMIN') {
-      return forbiddenResponse('Admin access required');
+      return forbiddenResponse('Admin access required', origin);
     }
 
     const eventId = event.pathParameters?.['eventId'];
     if (!eventId) {
-      return badRequestResponse('Event ID is required');
+      return badRequestResponse('Event ID is required', origin);
     }
 
     // Get existing event
@@ -30,7 +31,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     if (!existing.Item) {
-      return notFoundResponse('Event not found');
+      return notFoundResponse('Event not found', origin);
     }
 
     // Soft delete: set status to CANCELLED
@@ -50,9 +51,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       },
     }));
 
-    return successResponse({ message: 'Event cancelled' });
+    return successResponse({ message: 'Event cancelled' }, origin);
   } catch (error) {
     console.error('Error deleting event:', error);
-    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to delete event');
+    return errorResponse(500, 'INTERNAL_ERROR', 'Failed to delete event', origin);
   }
 };

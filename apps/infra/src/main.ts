@@ -4,7 +4,7 @@ import { AuthStack } from './stacks/auth-stack';
 import { DatabaseStack } from './stacks/database-stack';
 import { EmailStack } from './stacks/email-stack';
 import { ApiStack } from './stacks/api-stack';
-import { FrontendStack } from './stacks/frontend-stack';
+import { FrontendStack, ConfigDeployStack } from './stacks/frontend-stack';
 
 const app = new cdk.App();
 
@@ -31,6 +31,12 @@ const emailStack = new EmailStack(app, `${stageName}-EventTickets-Email`, {
   domainName: app.node.tryGetContext('domain') || '',
 });
 
+// FrontendStack is created first to establish CloudFront distribution URLs
+const frontendStack = new FrontendStack(app, `${stageName}-EventTickets-Frontend`, {
+  env,
+  stageName,
+});
+
 const apiStack = new ApiStack(app, `${stageName}-EventTickets-Api`, {
   env,
   stageName,
@@ -39,18 +45,29 @@ const apiStack = new ApiStack(app, `${stageName}-EventTickets-Api`, {
   table: databaseStack.table,
   emailIdentityArn: emailStack.emailIdentityArn,
   fromEmail: emailStack.fromEmail,
+  frontendUrls: {
+    public: frontendStack.distributionUrls['public'],
+    admin: frontendStack.distributionUrls['admin'],
+    greeter: frontendStack.distributionUrls['greeter'],
+  },
 });
 
 apiStack.addDependency(authStack);
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(emailStack);
+apiStack.addDependency(frontendStack);
 
-new FrontendStack(app, `${stageName}-EventTickets-Frontend`, {
+// Deploy config.json in a separate stack that depends on both Frontend and Api
+const configStack = new ConfigDeployStack(app, `${stageName}-EventTickets-Config`, {
   env,
   stageName,
+  frontendStack,
   apiUrl: apiStack.apiUrl,
   userPoolId: authStack.userPool.userPoolId,
   userPoolClientId: authStack.userPoolClient.userPoolClientId,
-}).addDependency(apiStack);
+  stripePublishableKey: app.node.tryGetContext('stripePublishableKey') || '',
+});
+configStack.addDependency(frontendStack);
+configStack.addDependency(apiStack);
 
 app.synth();
