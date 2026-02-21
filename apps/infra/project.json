@@ -2,26 +2,43 @@
   "name": "@event-tickets/infra",
   "targets": {
     "synth": {
-      "command": "npx cdk synth",
-      "options": {
-        "cwd": "apps/infra"
-      }
-    },
-    "deploy": {
-      "command": "npx cdk deploy --all --require-approval never",
+      "command": "npx dotenv -e .env -- npx cdk synth",
       "options": {
         "cwd": "apps/infra"
       },
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        {
+          "projects": ["@event-tickets/public", "@event-tickets/admin", "@event-tickets/greeter"],
+          "target": "build"
+        }
+      ]
     },
-    "diff": {
-      "command": "npx cdk diff",
+    "deploy": {
+      "command": "npx dotenv -e .env -- npx cdk deploy --all --require-approval never",
       "options": {
         "cwd": "apps/infra"
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": ["@event-tickets/public", "@event-tickets/admin", "@event-tickets/greeter"],
+          "target": "build"
+        }
+      ]
+    },
+    "diff": {
+      "command": "npx dotenv -e .env -- npx cdk diff",
+      "options": {
+        "cwd": "apps/infra"
+      },
+      "dependsOn": [
+        {
+          "projects": ["@event-tickets/public", "@event-tickets/admin", "@event-tickets/greeter"],
+          "target": "build"
+        }
+      ]
     },
     "destroy": {
-      "command": "npx cdk destroy --all",
+      "command": "npx dotenv -e .env -- npx cdk destroy --all",
       "options": {
         "cwd": "apps/infra"
       }

@@ -4,9 +4,8 @@
 dist
 tmp
 out-tsc
-*.d.ts
-*.d.ts.map
 *.tsbuildinfo
+cdk.out
 
 # dependencies
 node_modules
@@ -26,6 +25,10 @@ node_modules
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# environment
+.env
+.env.local
 
 # misc
 /.sass-cache

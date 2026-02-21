@@ -104,13 +104,6 @@ export class ApiStack extends cdk.Stack {
       return fn;
     };
 
-    // Post-confirmation trigger
-    const postConfirmation = createFunction(
-      'post-confirmation',
-      path.join(libsRoot, 'lambda', 'users', 'src', 'post-confirmation.ts')
-    );
-    props.userPool.addTrigger(cognito.UserPoolOperation.POST_CONFIRMATION, postConfirmation);
-
     // Lambda Authorizer
     const authorizerFn = new lambdaNode.NodejsFunction(this, 'authorizer', {
       ...commonLambdaProps,

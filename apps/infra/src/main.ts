@@ -15,15 +15,17 @@ const env = {
 
 const stageName = app.node.tryGetContext('stage') || 'dev';
 
-const authStack = new AuthStack(app, `${stageName}-EventTickets-Auth`, {
-  env,
-  stageName,
-});
-
 const databaseStack = new DatabaseStack(app, `${stageName}-EventTickets-Database`, {
   env,
   stageName,
 });
+
+const authStack = new AuthStack(app, `${stageName}-EventTickets-Auth`, {
+  env,
+  stageName,
+  table: databaseStack.table,
+});
+authStack.addDependency(databaseStack);
 
 const emailStack = new EmailStack(app, `${stageName}-EventTickets-Email`, {
   env,
@@ -52,7 +54,6 @@ const apiStack = new ApiStack(app, `${stageName}-EventTickets-Api`, {
   },
 });
 
-apiStack.addDependency(authStack);
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(emailStack);
 apiStack.addDependency(frontendStack);

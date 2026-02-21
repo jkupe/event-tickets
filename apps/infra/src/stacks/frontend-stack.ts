@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
@@ -90,6 +91,7 @@ export class ConfigDeployStack extends cdk.Stack {
 
     const region = this.region;
     const apps = ['public', 'admin', 'greeter'] as const;
+    const appsRoot = path.join(__dirname, '..', '..', '..');
 
     for (const appName of apps) {
       const config: Record<string, string> = {
@@ -103,11 +105,13 @@ export class ConfigDeployStack extends cdk.Stack {
       }
 
       new s3deploy.BucketDeployment(this, `${appName}ConfigDeploy`, {
-        sources: [s3deploy.Source.jsonData('config.json', config)],
+        sources: [
+          s3deploy.Source.asset(path.join(appsRoot, appName, 'dist')),
+          s3deploy.Source.jsonData('config.json', config),
+        ],
         destinationBucket: props.frontendStack.buckets[appName],
         distribution: props.frontendStack.distributions[appName],
-        distributionPaths: ['/config.json'],
-        prune: false,
+        distributionPaths: ['/*'],
       });
     }
   }
