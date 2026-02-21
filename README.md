@@ -1,106 +1,185 @@
-# New Nx Repository
+# Event Tickets
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+A serverless event ticketing platform built with React, AWS CDK, and Nx.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+**Public app** for browsing events and purchasing tickets via Stripe. **Admin app** for managing events and attendees. **Greeter app** (PWA) for scanning and validating tickets at the door.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
-## Finish your Nx platform setup
+## Architecture
 
-🚀 [Finish setting up your workspace](https://cloud.nx.app/connect/ppfP5O6IDK) to get faster builds with remote caching, distributed task execution, and self-healing CI. [Learn more about Nx Cloud](https://nx.dev/ci/intro/why-nx-cloud).
-## Generate a library
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Vite, Tailwind CSS, TanStack Query |
+| API | API Gateway + Lambda (Node.js 20, TypeScript) |
+| Auth | Amazon Cognito (email/password, user groups) |
+| Database | DynamoDB (single-table design) |
+| Payments | Stripe Checkout |
+| Email | Amazon SES |
+| Hosting | S3 + CloudFront |
+| IaC | AWS CDK (TypeScript) |
+| Monorepo | Nx |
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+## Prerequisites
+
+- **Node.js** 20+
+- **AWS CLI** configured with a [named profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+- **AWS CDK** bootstrapped in your account/region (`npx cdk bootstrap`)
+- **Stripe account** (for payment processing) — [get API keys](https://dashboard.stripe.com/apikeys)
+
+## Quick Start
+
+### 1. Install dependencies
+
+```bash
+npm install
 ```
 
-## Run tasks
+### 2. Configure AWS profile
 
-To build the library use:
-
-```sh
-npx nx build pkg1
-```
-
-To run any task with Nx use:
-
-```sh
-npx nx <target> <project-name>
-```
-
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
-
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Versioning and releasing
-
-To version and release the library use
+Create `apps/infra/.env`:
 
 ```
-npx nx release
+AWS_PROFILE=YourProfileName
 ```
 
-Pass `--dry-run` to see what would happen without actually releasing the library.
+### 3. Deploy infrastructure
 
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Keep TypeScript project references up to date
-
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
-
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
-
-```sh
-npx nx sync
+```bash
+npx nx run infra:deploy
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+This single command builds all three frontend apps, synthesizes CloudFormation templates, and deploys everything:
 
-```sh
-npx nx sync:check
+- DynamoDB table
+- Cognito user pool with `admin` and `greeter` groups
+- SES email identity (if domain configured)
+- S3 buckets + CloudFront distributions
+- API Gateway + Lambda functions
+- Frontend app code + runtime config
+
+### 4. Create an admin user
+
+After deployment, CDK outputs the `UserPoolId`. Use it to create your first admin account:
+
+```bash
+# Replace <UserPoolId> with the value from deploy output
+# Replace <YourProfile> with your AWS profile name
+
+aws cognito-idp admin-create-user \
+  --user-pool-id <UserPoolId> \
+  --username admin@example.com \
+  --user-attributes Name=email,Value=admin@example.com Name=name,Value="Admin" \
+  --temporary-password 'TempPass1!' \
+  --profile <YourProfile>
+
+aws cognito-idp admin-add-user-to-group \
+  --user-pool-id <UserPoolId> \
+  --username admin@example.com \
+  --group-name admin \
+  --profile <YourProfile>
 ```
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+Sign in to the admin app using the temporary password. You'll be prompted to set a permanent password on first login.
 
-## Nx Cloud
+### 5. Configure Stripe secrets
 
-Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
+CDK creates two empty secrets in AWS Secrets Manager. Populate them with your Stripe keys:
 
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+```bash
+# Replace <YourProfile> with your AWS profile name
 
-### Set up CI (non-Github Actions CI)
+aws secretsmanager put-secret-value \
+  --secret-id dev/event-tickets/stripe-api-key \
+  --secret-string 'sk_test_...' \
+  --profile <YourProfile>
 
-**Note:** This is only required if your CI provider is not GitHub Actions.
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
+aws secretsmanager put-secret-value \
+  --secret-id dev/event-tickets/stripe-webhook-secret \
+  --secret-string 'whsec_...' \
+  --profile <YourProfile>
 ```
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+To pass your Stripe publishable key to the frontend:
 
-## Install Nx Console
+```bash
+npx nx run infra:deploy -- -c stripePublishableKey=pk_test_...
+```
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+### 6. (Optional) Configure email
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+To enable transactional emails (ticket confirmations, etc.), deploy with a verified domain:
 
-## Useful links
+```bash
+npx nx run infra:deploy -- -c domain=yourdomain.com
+```
 
-Learn more:
+After deploying, add the DNS records output by CDK to verify your domain in SES. If your SES account is in sandbox mode, you can only send to verified email addresses — [request production access](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) to send to any address.
 
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### 7. (Optional) Create a greeter user
 
-And join the Nx community:
+```bash
+aws cognito-idp admin-create-user \
+  --user-pool-id <UserPoolId> \
+  --username greeter@example.com \
+  --user-attributes Name=email,Value=greeter@example.com Name=name,Value="Greeter" \
+  --temporary-password 'TempPass1!' \
+  --profile <YourProfile>
 
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+aws cognito-idp admin-add-user-to-group \
+  --user-pool-id <UserPoolId> \
+  --username greeter@example.com \
+  --group-name greeter \
+  --profile <YourProfile>
+```
+
+## Local Development
+
+Run any frontend app locally:
+
+```bash
+npx nx serve public    # http://localhost:3000
+npx nx serve admin     # http://localhost:3001
+npx nx serve greeter   # http://localhost:3002
+```
+
+The apps load `config.json` at runtime for API URL and Cognito settings. For local development, create a `public/config.json` in each app's directory with values from your deployed stack outputs.
+
+## Project Structure
+
+```
+apps/
+  public/         # Customer-facing app (browse events, buy tickets)
+  admin/          # Admin app (manage events, view attendees)
+  greeter/        # Greeter PWA (scan/validate tickets)
+  infra/          # AWS CDK infrastructure
+libs/
+  lambda/         # Lambda function handlers
+    auth/         #   Custom authorizer
+    email/        #   Email sending
+    events/       #   Event CRUD
+    tickets/      #   Checkout, validation, listing
+    users/        #   Profile management, post-confirmation trigger
+  shared/         # Shared frontend libraries
+    api-client/   #   API communication layer
+    auth/         #   Authentication utilities
+    types/        #   Shared TypeScript types
+    ui/           #   React component library
+    utils/        #   Utility functions
+```
+
+## Nx Commands
+
+```bash
+npx nx run infra:synth      # Synthesize CloudFormation templates
+npx nx run infra:diff       # Preview infrastructure changes
+npx nx run infra:deploy     # Build & deploy everything
+npx nx run infra:destroy    # Tear down all stacks
+npx nx graph                # Visualize project dependency graph
+```
+
+## Teardown
+
+```bash
+npx nx run infra:destroy
+```
+
+Note: The DynamoDB table and Cognito user pool use `RETAIN` removal policies and will not be deleted automatically. Remove them manually via the AWS Console if needed.

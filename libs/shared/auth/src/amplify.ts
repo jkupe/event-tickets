@@ -4,6 +4,7 @@ import {
   signUp as amplifySignUp,
   signOut as amplifySignOut,
   confirmSignUp as amplifyConfirmSignUp,
+  confirmSignIn as amplifyConfirmSignIn,
   resetPassword as amplifyResetPassword,
   confirmResetPassword as amplifyConfirmResetPassword,
   fetchAuthSession,
@@ -41,6 +42,10 @@ export async function signUp(email: string, password: string, name: string) {
 
 export async function confirmSignUp(email: string, code: string) {
   return amplifyConfirmSignUp({ username: email, confirmationCode: code });
+}
+
+export async function confirmSignIn(newPassword: string) {
+  return amplifyConfirmSignIn({ challengeResponse: newPassword });
 }
 
 export async function signOut() {

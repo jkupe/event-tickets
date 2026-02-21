@@ -86,6 +86,7 @@ export class AuthStack extends cdk.Stack {
         format: lambdaNode.OutputFormat.ESM,
         mainFields: ['module', 'main'],
         externalModules: ['@aws-sdk/*'],
+        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
       },
     });
     props.table.grantReadWriteData(postConfirmation);

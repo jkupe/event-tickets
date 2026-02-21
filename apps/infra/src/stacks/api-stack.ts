@@ -82,6 +82,7 @@ export class ApiStack extends cdk.Stack {
       format: lambdaNode.OutputFormat.ESM,
       mainFields: ['module', 'main'],
       externalModules: ['@aws-sdk/*'],
+      banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
     };
 
     const commonLambdaProps: Partial<lambdaNode.NodejsFunctionProps> = {
@@ -204,6 +205,23 @@ export class ApiStack extends cdk.Stack {
         allowOrigins: allowedOrigins,
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: ['Content-Type', 'Authorization'],
+      },
+    });
+
+    // Gateway responses — add CORS headers to API Gateway's own error responses
+    // (authorizer failures, Lambda crashes, etc.) so browsers can read the actual error.
+    api.addGatewayResponse('Default4xx', {
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': "'*'",
+        'Access-Control-Allow-Headers': "'Content-Type,Authorization'",
+      },
+    });
+    api.addGatewayResponse('Default5xx', {
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': "'*'",
+        'Access-Control-Allow-Headers': "'Content-Type,Authorization'",
       },
     });
 
